@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		3A152F6E2CE1C5F100E37EB1 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3A152F6D2CE1C5F100E37EB1 /* GoogleService-Info.plist */; };
-		3A152F712CE1C72300E37EB1 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 3A152F702CE1C72300E37EB1 /* FirebaseAnalytics */; };
 		3A152F732CE1C72300E37EB1 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3A152F722CE1C72300E37EB1 /* FirebaseCore */; };
 		3A152F752CE1C72300E37EB1 /* FirebaseDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = 3A152F742CE1C72300E37EB1 /* FirebaseDatabase */; };
 		3A152F772CE1C72300E37EB1 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 3A152F762CE1C72300E37EB1 /* FirebaseFirestore */; };
@@ -78,7 +77,6 @@
 				3A152F752CE1C72300E37EB1 /* FirebaseDatabase in Frameworks */,
 				3A152F772CE1C72300E37EB1 /* FirebaseFirestore in Frameworks */,
 				3A152F732CE1C72300E37EB1 /* FirebaseCore in Frameworks */,
-				3A152F712CE1C72300E37EB1 /* FirebaseAnalytics in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

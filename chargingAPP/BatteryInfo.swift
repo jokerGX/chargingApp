@@ -1,17 +1,10 @@
-//
-//  BatteryInfo.swift
-//  chargingAPP
-//
-//  Created by yikang cheng on 2024/11/4.
-//
-
 import Foundation
 import Combine
 import UIKit
+import FirebaseFirestore
 
 class BatteryInfo: ObservableObject {
     // Published properties to update the UI
-    @Published var batteryState: UIDevice.BatteryState = .unknown
     @Published var batteryLevel: Float = 0.0
     @Published var isCharging: Bool = false
     @Published var estimatedTimeToFull: String = "Calculating..."
@@ -23,14 +16,21 @@ class BatteryInfo: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var batteryHistory: [(level: Float, time: Date)] = []
     private let historyLimit = 5 // Number of data points to average
-    private var timer: AnyCancellable?
+    
+    // Firestore reference
+    private let db = Firestore.firestore()
+    private let deviceID: String
+    private let deviceName: String
     
     init() {
+        // Initialize device ID and name
+        self.deviceID = UIDevice.current.uniqueID
+        self.deviceName = UIDevice.current.name
+        
         // Enable battery monitoring
         UIDevice.current.isBatteryMonitoringEnabled = true
-        self.batteryState = UIDevice.current.batteryState
         self.batteryLevel = UIDevice.current.batteryLevel
-        self.isCharging = self.batteryState == .charging || self.batteryState == .full
+        self.isCharging = UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full
         
         // Observe battery state changes
         NotificationCenter.default.publisher(for: UIDevice.batteryStateDidChangeNotification)
@@ -53,30 +53,32 @@ class BatteryInfo: ObservableObject {
             }
             .store(in: &cancellables)
         
-        // Start a timer to poll battery level periodically (every 30 seconds)
-        startPolling(every: 30)
+        // Observe changes to published properties and update Firestore accordingly
+        Publishers.CombineLatest4($batteryLevel, $isCharging, $estimatedTimeToFull, $thermalState)
+            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
+            .sink { [weak self] level, charging, time, thermal in
+                self?.sendBatteryDataToFirestore()
+            }
+            .store(in: &cancellables)
         
         // Initial data capture
         captureCurrentBatteryLevel()
+        sendBatteryDataToFirestore()
     }
     
     // MARK: - Handling Battery State Changes
     
     public func handleBatteryStateChange() {
         DispatchQueue.main.async {
-            self.batteryState = UIDevice.current.batteryState
-            self.isCharging = self.batteryState == .charging || self.batteryState == .full
+            self.isCharging = UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full
             
             if self.isCharging {
                 // Reset battery history to start fresh
                 self.batteryHistory.removeAll()
                 self.captureCurrentBatteryLevel()
-                
-                // Start faster polling to gather data quickly
-                self.startPolling(every: 10)
             } else {
                 // When not charging, set estimated time accordingly
-                if self.batteryState == .full {
+                if UIDevice.current.batteryState == .full {
                     self.estimatedTimeToFull = "Full Charge"
                 } else {
                     self.estimatedTimeToFull = "Not Charging"
@@ -84,20 +86,13 @@ class BatteryInfo: ObservableObject {
                 
                 // Reset battery history
                 self.batteryHistory.removeAll()
-                
-                // Restore normal polling interval
-                self.startPolling(every: 30)
             }
             
             // Handle Full Charge State
-            if self.batteryState == .full || self.batteryLevel >= 1.0 {
+            if UIDevice.current.batteryState == .full || self.batteryLevel >= 1.0 {
                 self.estimatedTimeToFull = "Full Charge"
                 self.isCharging = false
                 self.batteryHistory.removeAll() // Reset history
-                
-                // Stop polling as device is fully charged
-                self.timer?.cancel()
-                self.timer = nil
             } else if self.isCharging {
                 self.estimatedTimeToFull = "Calculating..."
             }
@@ -122,14 +117,10 @@ class BatteryInfo: ObservableObject {
             self.batteryLevel = currentLevel
             
             // If fully charged
-            if self.batteryState == .full || self.batteryLevel >= 1.0 {
+            if UIDevice.current.batteryState == .full || self.batteryLevel >= 1.0 {
                 self.estimatedTimeToFull = "Full Charge"
                 self.isCharging = false
                 self.batteryHistory.removeAll() // Reset history
-                
-                // Stop polling as device is fully charged
-                self.timer?.cancel()
-                self.timer = nil
                 return
             }
             
@@ -160,14 +151,10 @@ class BatteryInfo: ObservableObject {
         self.batteryLevel = currentLevel
         
         // If fully charged
-        if self.batteryState == .full || self.batteryLevel >= 1.0 {
+        if UIDevice.current.batteryState == .full || self.batteryLevel >= 1.0 {
             self.estimatedTimeToFull = "Full Charge"
             self.isCharging = false
             self.batteryHistory.removeAll() // Reset history
-            
-            // Stop polling as device is fully charged
-            self.timer?.cancel()
-            self.timer = nil
             return
         }
         
@@ -176,24 +163,6 @@ class BatteryInfo: ObservableObject {
         
         // Calculate estimated time immediately
         self.calculateEstimatedTime()
-    }
-    
-    // MARK: - Polling Mechanism
-    
-    private func pollBatteryLevel() {
-        updateBatteryLevel()
-    }
-    
-    private func startPolling(every interval: TimeInterval) {
-        // Cancel existing timer if any
-        timer?.cancel()
-        
-        // Start a new timer
-        timer = Timer.publish(every: interval, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.pollBatteryLevel()
-            }
     }
     
     // MARK: - Calculating Estimated Time to Full Charge
@@ -251,21 +220,52 @@ class BatteryInfo: ObservableObject {
             }
         }
     }
-//    public func updateThermalState() {
-//        DispatchQueue.main.async {
-//            // Force critical thermal state for testing
-//            self.thermalState = .critical
-//            
-//            // Handle critical thermal state
-//            if self.thermalState == .critical && !self.showCriticalAlert {
-//                self.showCriticalAlert = true
-//            }
-//        }
-//    }
+    
+    // MARK: - Sending Data to Firestore
+    
+    private func sendBatteryDataToFirestore() {
+        // Reference to the "batteryData" collection with deviceID as document ID
+        let batteryDocument = db.collection("batteryData").document(deviceID)
+        
+        // Prepare data to send
+        let data: [String: Any] = [
+            "deviceID": deviceID,
+            "deviceName": deviceName,
+            "timestamp": Timestamp(date: Date()),
+            "batteryLevel": batteryLevel,
+            "isCharging": isCharging,
+            "estimatedTimeToFull": estimatedTimeToFull,
+            "thermalState": thermalStateString()
+        ]
+        
+        // Set data to Firestore (merge to update existing fields)
+        batteryDocument.setData(data, merge: true) { error in
+            if let error = error {
+                print("Error sending battery data to Firestore: \(error.localizedDescription)")
+            } else {
+                print("Battery data successfully sent to Firestore.")
+            }
+        }
+    }
+    
+    // Helper methods to convert enums to strings
+    private func thermalStateString() -> String {
+        switch thermalState {
+        case .nominal:
+            return "nominal"
+        case .fair:
+            return "fair"
+        case .serious:
+            return "serious"
+        case .critical:
+            return "critical"
+        @unknown default:
+            return "unknown"
+        }
+    }
     
     deinit {
         // Disable battery monitoring when the object is deallocated
         UIDevice.current.isBatteryMonitoringEnabled = false
-        timer?.cancel()
     }
 }
