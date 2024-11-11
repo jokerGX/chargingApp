@@ -1,9 +1,4 @@
-//
-//  ContentView.swift
-//  chargingAPP
-//
-//  Created by yikang cheng on 2024/11/4.
-//
+// ContentView.swift
 
 import SwiftUI
 
@@ -25,7 +20,7 @@ struct ContentView: View {
                     // Charging Status Card
                     InfoCardView(title: "Charging Status",
                                 value: chargingStatusText,
-                                icon: systemIconName(for: batteryInfo.batteryState),
+                                icon: systemIconName(for: batteryInfo.isCharging),
                                 iconColor: chargingStatusColor)
                     
                     // Estimated Time to Full Charge Card
@@ -64,15 +59,11 @@ struct ContentView: View {
     // MARK: - Computed Properties for UI Enhancements
     
     private var chargingStatusColor: Color {
-        switch batteryInfo.batteryState {
-        case .charging:
+        switch batteryInfo.isCharging {
+        case true:
             return Color.green
-        case .full:
-            return Color.blue
-        case .unplugged:
+        case false:
             return Color.red
-        default:
-            return Color.gray
         }
     }
     
@@ -97,31 +88,16 @@ struct ContentView: View {
     
     // MARK: - Helper Functions
     
-    private func systemIconName(for state: UIDevice.BatteryState) -> String {
-        switch state {
-        case .charging:
-            return "bolt.fill"
-        case .full:
-            return "checkmark.circle.fill"
-        case .unplugged:
-            return "battery.100"
-        default:
-            return "questionmark.circle"
-        }
+    private func systemIconName(for isCharging: Bool) -> String {
+        return isCharging ? "bolt.fill" : "battery.100"
     }
     
     private var chargingStatusText: String {
-        switch batteryInfo.batteryState {
-        case .unknown:
-            return "Unknown"
-        case .unplugged:
-            return "Not Charging"
-        case .charging:
+        switch batteryInfo.isCharging {
+        case true:
             return "Charging"
-        case .full:
-            return "Full"
-        @unknown default:
-            return "Unknown"
+        case false:
+            return batteryInfo.batteryLevel >= 1.0 ? "Full" : "Not Charging"
         }
     }
     

@@ -1,3 +1,5 @@
+// BatteryInfo.swift
+
 import Foundation
 import Combine
 import UIKit
@@ -19,13 +21,19 @@ class BatteryInfo: ObservableObject {
     
     // Firestore reference
     private let db = Firestore.firestore()
-    private let deviceID: String
     private let deviceName: String
+    private let deviceID: String
     
     init() {
-        // Initialize device ID and name
-        self.deviceID = UIDevice.current.uniqueID
+        // Initialize device name
         self.deviceName = UIDevice.current.name
+        
+        // Use device name as deviceID for Firestore document ID
+        self.deviceID = deviceName
+        
+        print("Initialized BatteryInfo with Device Name: \(self.deviceName)")
+        print("Device ID (Firestore Document ID): \(self.deviceID)")
+
         
         // Enable battery monitoring
         UIDevice.current.isBatteryMonitoringEnabled = true
@@ -55,8 +63,7 @@ class BatteryInfo: ObservableObject {
         
         // Observe changes to published properties and update Firestore accordingly
         Publishers.CombineLatest4($batteryLevel, $isCharging, $estimatedTimeToFull, $thermalState)
-            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
-            .sink { [weak self] level, charging, time, thermal in
+            .sink { [weak self] _, _, _, _ in
                 self?.sendBatteryDataToFirestore()
             }
             .store(in: &cancellables)
@@ -224,12 +231,11 @@ class BatteryInfo: ObservableObject {
     // MARK: - Sending Data to Firestore
     
     private func sendBatteryDataToFirestore() {
-        // Reference to the "batteryData" collection with deviceID as document ID
+        // Reference to the "batteryData" collection with deviceName as document ID
         let batteryDocument = db.collection("batteryData").document(deviceID)
         
         // Prepare data to send
         let data: [String: Any] = [
-            "deviceID": deviceID,
             "deviceName": deviceName,
             "timestamp": Timestamp(date: Date()),
             "batteryLevel": batteryLevel,
@@ -248,7 +254,7 @@ class BatteryInfo: ObservableObject {
         }
     }
     
-    // Helper methods to convert enums to strings
+    // Helper method to convert thermal state to string
     private func thermalStateString() -> String {
         switch thermalState {
         case .nominal:
