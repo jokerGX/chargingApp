@@ -21,19 +21,17 @@ class BatteryInfo: ObservableObject {
     
     // Firestore reference
     private let db = Firestore.firestore()
-    private let deviceName: String
     private let deviceID: String
+    private let deviceName: String
     
     init() {
-        // Initialize device name
+        // Initialize device ID and name
+        self.deviceID = UUIDManager.shared.uuid
         self.deviceName = UIDevice.current.name
         
-        // Use device name as deviceID for Firestore document ID
-        self.deviceID = deviceName
-        
-        print("Initialized BatteryInfo with Device Name: \(self.deviceName)")
-        print("Device ID (Firestore Document ID): \(self.deviceID)")
-
+        // Debugging: Print device ID and name
+        print("Initialized BatteryInfo with Device ID: \(self.deviceID)")
+        print("Device Name: \(self.deviceName)")
         
         // Enable battery monitoring
         UIDevice.current.isBatteryMonitoringEnabled = true
@@ -231,11 +229,12 @@ class BatteryInfo: ObservableObject {
     // MARK: - Sending Data to Firestore
     
     private func sendBatteryDataToFirestore() {
-        // Reference to the "batteryData" collection with deviceName as document ID
+        // Reference to the "batteryData" collection with deviceID as document ID
         let batteryDocument = db.collection("batteryData").document(deviceID)
         
         // Prepare data to send
         let data: [String: Any] = [
+            "deviceID": deviceID,
             "deviceName": deviceName,
             "timestamp": Timestamp(date: Date()),
             "batteryLevel": batteryLevel,
@@ -249,7 +248,7 @@ class BatteryInfo: ObservableObject {
             if let error = error {
                 print("Error sending battery data to Firestore: \(error.localizedDescription)")
             } else {
-                print("Battery data successfully sent to Firestore.")
+                print("Battery data successfully sent to Firestore for device: \(self.deviceName)")
             }
         }
     }
