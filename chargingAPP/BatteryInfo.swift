@@ -228,7 +228,7 @@ class BatteryInfo: ObservableObject {
     
     // MARK: - Sending Data to Firestore
     
-    private func sendBatteryDataToFirestore() {
+    public func sendBatteryDataToFirestore() {
         // Reference to the "batteryData" collection with deviceID as document ID
         let batteryDocument = db.collection("batteryData").document(deviceID)
         
